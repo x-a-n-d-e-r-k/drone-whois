@@ -46,7 +46,7 @@ def main():
     try:
         lines = [line.rstrip('\n') for line in open(arguments['<file>'])]
     except IOError as e:
-        print e
+        print "Fatal: Could not open file. Error: ", e
         exit(1)
     for line in lines:
         o = IPWhois(line)
