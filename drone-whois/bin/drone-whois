@@ -1,0 +1,90 @@
+#!/usr/bin/env python
+"""drone-whois
+
+Usage:
+    drone-whois [options] <id> <file>
+    drone-whois --version
+
+Options:
+    -h --help       Show usage.
+    --version       Show version.
+    -k              Allow insecure SSL connections.
+
+"""
+import os
+from sys import exit
+from urlparse import urlparse
+from ipwhois import IPWhois
+from docopt import docopt
+from pylair import models
+from pylair import client
+
+
+def main():
+    arguments = docopt(__doc__, version='drone-whois 1.0.0')
+    lair_url = ''
+    try:
+        lair_url = os.environ['LAIR_API_SERVER']
+    except KeyError:
+        print "Fatal: Missing LAIR_API_SERVER environment variable"
+        exit(1)
+
+    u = urlparse(lair_url)
+    if u.username is None or u.password is None:
+        print "Fatal: Missing username and/or password"
+        exit(1)
+
+    project_id = arguments['<id>']
+    project = dict(models.project)
+    project['id'] = project_id
+    project['commands'] = [{'command': 'ipwhois', 'tool': 'ipwhois'}]
+
+    opts = client.Options(u.username, u.password, u.hostname + ":" + str(u.port), project_id, scheme='http',
+                          insecure_skip_verify=arguments['-k'])
+
+    lines = []
+    try:
+        lines = [line.rstrip('\n') for line in open(arguments['<file>'])]
+    except IOError as e:
+        print e
+        exit(1)
+    for line in lines:
+        o = IPWhois(line)
+        results = o.lookup_rws()
+        for net in results['nets']:
+            netblock = dict(models.netblock)
+            netblock['projectId'] = project_id
+            netblock['asn'] = results['asn']
+            netblock['asnCountryCode'] = results['asn_country_code']
+            netblock['asnCidr'] = results['asn_cidr']
+            netblock['asnDate'] = results['asn_date']
+            netblock['asnRegistry'] = results['asn_registry']
+            if net['abuse_emails'] is not None:
+                netblock['abuseEmails'] = ','.join(net['abuse_emails'].split('\n'))
+            if net['misc_emails'] is not None:
+                netblock['miscEmails'] = ','.join(net['misc_emails'].split('\n'))
+            if net['tech_emails'] is not None:
+                netblock['techEmails'] = ','.join(net['tech_emails'].split('\n'))
+            netblock['cidr'] = net['cidr']
+            netblock['name'] = net['name']
+            netblock['address'] = net['address']
+            netblock['city'] = net['city']
+            netblock['state'] = net['state']
+            netblock['country'] = net['country']
+            netblock['postalCode'] = net['postal_code']
+            netblock['created'] = net['created']
+            netblock['updated'] = net['updated']
+            netblock['description'] = net['description']
+            netblock['handle'] = net['handle']
+            project['netblocks'].append(netblock)
+
+    res = client.import_project(project, opts)
+    if res['status'] == 'Error':
+        print "Fatal: " + res['message']
+        exit(1)
+    print "Success: Operation completed successfully"
+
+
+if __name__ == '__main__':
+    main()
+
