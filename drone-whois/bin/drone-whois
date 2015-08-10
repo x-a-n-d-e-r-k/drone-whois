@@ -39,6 +39,7 @@ def main():
     project = dict(models.project)
     project['id'] = project_id
     project['commands'] = [{'command': 'ipwhois', 'tool': 'ipwhois'}]
+    project['tool'] = 'drone-whois'
 
     opts = client.Options(u.username, u.password, u.hostname + ":" + str(u.port), project_id, scheme='http',
                           insecure_skip_verify=arguments['-k'])
