@@ -12,6 +12,7 @@ setup(
     install_requires=[
         "pylair >= 0.2",
         "ipwhois >= 0.10.2",
-        "docopt >= 0.6.2"
+        "docopt >= 0.6.2",
+        "netaddr >= 0.7.15"
     ],
 )

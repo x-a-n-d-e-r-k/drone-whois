@@ -14,6 +14,7 @@ Options:
 import os
 from sys import exit
 from urlparse import urlparse
+from netaddr import IPAddress, AddrFormatError
 from ipwhois import IPWhois
 from docopt import docopt
 from pylair import models
@@ -43,15 +44,24 @@ def main():
                           insecure_skip_verify=arguments['-k'])
 
     lines = []
+    cidrs = set()
     try:
         lines = [line.rstrip('\n') for line in open(arguments['<file>'])]
     except IOError as e:
-        print "Fatal: Could not open file. Error: ", e
+        print "Fatal: Could not open file. Error: {0}".format(e)
         exit(1)
     for line in lines:
+        try:
+            ip = IPAddress(line)
+        except AddrFormatError:
+            print "Info: Skipping {0}. Not an IP Address".format(line)
+            continue
         o = IPWhois(line)
         results = o.lookup_rws()
         for net in results['nets']:
+            if net['cidr'] in cidrs:
+                continue
+            cidrs.add(net['cidr'])
             netblock = dict(models.netblock)
             netblock['projectId'] = project_id
             netblock['asn'] = results['asn']
