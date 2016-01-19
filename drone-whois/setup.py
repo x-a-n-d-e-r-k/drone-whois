@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='drone-whois',
-    version='1.0.0',
+    version='1.0.1',
     author='Tom Steele',
     author_email='tom@stacktitan.com',
     scripts=['bin/drone-whois'],

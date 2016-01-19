@@ -41,7 +41,7 @@ def main():
     project['commands'] = [{'command': 'ipwhois', 'tool': 'ipwhois'}]
     project['tool'] = 'drone-whois'
 
-    opts = client.Options(u.username, u.password, u.hostname + ":" + str(u.port), project_id, scheme='http',
+    opts = client.Options(u.username, u.password, u.hostname + ":" + str(u.port), project_id, scheme=u.scheme,
                           insecure_skip_verify=arguments['-k'])
 
     lines = []
