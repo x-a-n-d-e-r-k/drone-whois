@@ -14,12 +14,12 @@ Options:
 import os
 from sys import exit
 from urlparse import urlparse
-from netaddr import IPAddress, AddrFormatError
+from netaddr import IPAddress, AddrFormatError, IPNetwork
 from ipwhois import IPWhois
 from docopt import docopt
 from pylair import models
 from pylair import client
-
+from pprint import pprint
 
 def main():
     arguments = docopt(__doc__, version='drone-whois 1.0.2')
@@ -53,42 +53,43 @@ def main():
         exit(1)
     for line in lines:
         try:
-            ip = IPAddress(line)
+             IPs = list(IPNetwork(line))
         except AddrFormatError:
             print "Info: Skipping {0}. Not an IP Address".format(line)
             continue
-        o = IPWhois(line)
-        results = o.lookup_rws()
-        for net in results['nets']:
-            if net['cidr'] in cidrs:
-                continue
-            cidrs.add(net['cidr'])
-            netblock = dict(models.netblock)
-            netblock['projectId'] = project_id
-            netblock['asn'] = results['asn']
-            netblock['asnCountryCode'] = results['asn_country_code']
-            netblock['asnCidr'] = results['asn_cidr']
-            netblock['asnDate'] = results['asn_date']
-            netblock['asnRegistry'] = results['asn_registry']
-            if net['abuse_emails'] is not None:
-                netblock['abuseEmails'] = ','.join(net['abuse_emails'].split('\n'))
-            if net['misc_emails'] is not None:
-                netblock['miscEmails'] = ','.join(net['misc_emails'].split('\n'))
-            if net['tech_emails'] is not None:
-                netblock['techEmails'] = ','.join(net['tech_emails'].split('\n'))
-            netblock['cidr'] = net['cidr']
-            netblock['name'] = net['name']
-            netblock['address'] = net['address']
-            netblock['city'] = net['city']
-            netblock['state'] = net['state']
-            netblock['country'] = net['country']
-            netblock['postalCode'] = net['postal_code']
-            netblock['created'] = net['created']
-            netblock['updated'] = net['updated']
-            netblock['description'] = net['description']
-            netblock['handle'] = net['handle']
-            project['netblocks'].append(netblock)
-
+        for ip in IPs:
+            o = IPWhois(ip)
+            results = o.lookup_rws()
+            for net in results['nets']:
+                if net['cidr'] in cidrs:
+                    continue
+                cidrs.add(net['cidr'])
+                netblock = dict(models.netblock)
+                netblock['projectId'] = project_id
+                netblock['asn'] = results['asn']
+                netblock['asnCountryCode'] = results['asn_country_code']
+                netblock['asnCidr'] = results['asn_cidr']
+                netblock['asnDate'] = results['asn_date']
+                netblock['asnRegistry'] = results['asn_registry']
+                if net['abuse_emails'] is not None:
+                    netblock['abuseEmails'] = ','.join(net['abuse_emails'].split('\n'))
+                if net['misc_emails'] is not None:
+                    netblock['miscEmails'] = ','.join(net['misc_emails'].split('\n'))
+                if net['tech_emails'] is not None:
+                    netblock['techEmails'] = ','.join(net['tech_emails'].split('\n'))
+                netblock['cidr'] = net['cidr']
+                netblock['name'] = net['name']
+                netblock['address'] = net['address']
+                netblock['city'] = net['city']
+                netblock['state'] = net['state']
+                netblock['country'] = net['country']
+                netblock['postalCode'] = net['postal_code']
+                netblock['created'] = net['created']
+                netblock['updated'] = net['updated']
+                netblock['description'] = net['description']
+                netblock['handle'] = net['handle']
+                project['netblocks'].append(netblock)
+    pprint(project)
     res = client.import_project(project, opts)
     if res['status'] == 'Error':
         print "Fatal: " + res['message']
