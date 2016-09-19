@@ -19,7 +19,6 @@ from ipwhois import IPWhois
 from docopt import docopt
 from pylair import models
 from pylair import client
-from pprint import pprint
 
 def main():
     arguments = docopt(__doc__, version='drone-whois 1.0.2')
@@ -89,7 +88,7 @@ def main():
                 netblock['description'] = net['description']
                 netblock['handle'] = net['handle']
                 project['netblocks'].append(netblock)
-    pprint(project)
+    
     res = client.import_project(project, opts)
     if res['status'] == 'Error':
         print "Fatal: " + res['message']
