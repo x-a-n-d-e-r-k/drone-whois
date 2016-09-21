@@ -15,13 +15,13 @@ import os
 from sys import exit
 from urlparse import urlparse
 from netaddr import IPAddress, AddrFormatError, IPNetwork
-from ipwhois import IPWhois
+from ipwhois import IPWhois, ASNRegistryError
 from docopt import docopt
 from pylair import models
 from pylair import client
 
 def main():
-    arguments = docopt(__doc__, version='drone-whois 1.0.2')
+    arguments = docopt(__doc__, version='drone-whois 1.0.3')
     lair_url = ''
     try:
         lair_url = os.environ['LAIR_API_SERVER']
@@ -58,7 +58,11 @@ def main():
             continue
         for ip in IPs:
             o = IPWhois(ip)
-            results = o.lookup_rws()
+            try:
+                results = o.lookup_rws()
+            except ASNRegistryError:
+                print 'Error: There was an exception thrown when looking up whois information for {}'.format(ip)
+                continue
             for net in results['nets']:
                 if net['cidr'] in cidrs:
                     continue
