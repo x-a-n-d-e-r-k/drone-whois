@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='drone-whois',
-    version='1.0.4',
+    version='1.1.0',
     author='Tom Steele',
     author_email='tom@stacktitan.com',
     scripts=['bin/drone-whois'],
@@ -11,8 +11,8 @@ setup(
     description='IPWhois tool for Lair.',
     install_requires=[
         "pylair >= 1.0.2",
-        "ipwhois == 0.10.3",
+        "ipwhois==0.14.0",
         "docopt >= 0.6.2",
-        "netaddr >= 0.7.15"
+        "ipaddr==2.1.11"
     ],
 )
