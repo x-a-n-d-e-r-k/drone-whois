@@ -1,0 +1,160 @@
+#!/usr/bin/python3
+"""drone-whois
+
+Usage:
+    drone-whois [options] <id> <file>
+    drone-whois --version
+
+Options:
+    -h --help       Show usage.
+    --version       Show version.
+    -k              Allow insecure SSL connections.
+
+"""
+import os
+import re
+from sys import exit
+import urllib3
+from ipaddress import ip_network,ip_address
+from ipwhois import IPWhois, ASNRegistryError, HTTPLookupError
+from docopt import docopt
+from pylair import models,client
+from pprint import pprint
+
+def validate_json(data):
+    try:
+        json.loads(data)
+        return True
+    except ValueError as error:
+        return False
+
+def main():
+    arguments = docopt(__doc__, version='drone-whois 2.0.0')
+    lair_url = ''
+    try:
+        lair_url = os.environ['LAIR_API_SERVER']
+    except KeyError:
+        print("Fatal: Missing LAIR_API_SERVER environment variable")
+        exit(1)
+
+    u = urllib3.util.parse_url(lair_url)
+    port = u.port
+    if u.scheme == 'https' and u.port == None:
+        port = 443
+
+    if u.auth is None:
+        print("Fatal: Missing username and/or password")
+        exit(1)
+
+    username,password = u.auth.split(":")
+    if username is None or password is None:
+        print("Fatal: Missing username and/or password")
+        exit(1)
+
+    project_id = arguments['<id>']
+    project = dict(models.project)
+    project['id'] = project_id
+    project['commands'] = [{'command': 'ipwhois', 'tool': 'ipwhois'}]
+    project['tool'] = 'drone-whois'
+
+    opts = client.Options(username.replace('%40','@'), password, u.hostname + ":" + str(port), project_id, scheme=u.scheme,
+                          insecure_skip_verify=arguments['-k'])
+
+    lines = []
+    cidrs = []
+    try:
+        lines = [line.rstrip('\n') for line in open(arguments['<file>'])]
+    except IOError as e:
+        print("Fatal: Could not open file. Error: ",e)
+        exit(1)
+    for line in lines:
+        try:
+            IPs = list(ip_network(line))
+        except AddrFormatError:
+            print("Info: Skipping ",line,". Not an IP Address")
+            continue
+        for ip in IPs:
+            o = IPWhois(str(ip))
+            pprint(str(ip))
+            try:
+                results = o.lookup_rdap(asn_methods=['dns','whois','http'],depth=1)
+            except ASNRegistryError as ase:
+                print('Error: There was an exception thrown when looking up whois information for ',str(ip),': ',ase)
+                continue
+            except (TypeError,AttributeError,urllib3.exceptions.HTTPError,HTTPLookupError) as e:
+                print('Error: Unknown exception: ',e)
+                continue
+            net=results['network']
+            cidrs += net['cidr']
+            netblock = dict(models.netblock)
+            #netblock['projectId'] = project_id
+            netblock['asn'] = results['asn']
+            netblock['asnCountryCode'] = results['asn_country_code']
+            netblock['asnCidr'] = results['asn_cidr']
+            netblock['asnDate'] = results['asn_date']
+            netblock['asnRegistry'] = results['asn_registry']
+            for obj in results['objects']:
+                contact = results['objects'][obj]['contact']
+                if contact is None:
+                    continue
+                if contact['email'] is not None:
+                    for eml in contact['email']:
+                        if netblock['techEmails'] is None:
+                            netblock['techEmails'] = eml['value']
+                        else:
+                            netblock['techEmails'] += ',' + eml['value']
+                if contact['address'] is not None:
+                    for adr in contact['address']:
+                        netblock['address'] = adr['value']
+            netblock['cidr'] = net['cidr']
+            netblock['name'] = net['name']
+            if net['events'] is not None:
+                for event in net['events']:
+                    if event['action'] == 'registration':
+                        netblock['created'] = event['timestamp']
+                    if event['action'] == 'last changed':
+                        netblock['updated'] = event['timestamp']
+            netblock['description'] = net['remarks']
+            netblock['handle'] = net['handle']
+            project['netblocks'].append(netblock)
+            #if results['raw_referral'] is None:
+            #    continue
+            #ref = results['referral']
+            #ref_raw = results['raw_referral']
+            #netblock = dict(models.netblock)
+            # netblock['cidr'] = ref['cidr'] Placeholder perhaps if bug is fixed.
+            #reg = r'(network:IP-Network):(?P<val>.+?)\n'
+            #pattern = re.compile(str(reg), re.DOTALL)
+            #match = pattern.finditer(ref_raw)
+            #for m in match:
+            #    netblock['cidr'] = m.group('val').strip()
+            #if 'name' in ref:
+            #    netblock['name'] = ref['name']
+            #if 'address' in ref:
+            #    netblock['address'] = ref['address']
+            #if 'city' in ref:
+            #    netblock['city'] = ref['city']
+            #if 'state' in ref:
+            #    netblock['state'] = ref['state']
+            #if 'country' in ref:
+            #    netblock['country'] = ref['country']
+            #if 'postal_code' in ref:
+            #    netblock['postalCode'] = ref['postal_code']
+            ## netblock['created'] = ref['created'] Placeholder
+            #if 'updated' in ref:
+            #    netblock['updated'] = ref['updated']
+            #if 'description' in ref:
+            #    netblock['description'] = ref['description']
+            # netblock['handle'] = ref['handle'] Placeholder
+            #project['netblocks'].append(netblock)
+
+    res = client.import_project(project, opts)
+    if res['status'] == 'Error':
+        print("Fatal: ", res['message'])
+        exit(1)
+    print("Success: Operation completed successfully")
+
+
+if __name__ == '__main__':
+    main()
+
