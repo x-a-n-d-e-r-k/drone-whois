@@ -2,13 +2,18 @@
 """drone-whois
 
 Usage:
-    drone-whois [options] <id> <file>
+    drone-whois [-k] [-u=<username>] [-p=<password>] [-U=<url>] [-v] <id> <file>
     drone-whois --version
+    drone-whois (-h | --help)
 
 Options:
     -h --help       Show usage.
     --version       Show version.
+    -v              Verbose output
     -k              Allow insecure SSL connections.
+    -u=<username>   Lair Username
+    -p=<password>   Lair Password
+    -U=<url>        Lair API URL
 
 """
 import os
@@ -21,35 +26,35 @@ from docopt import docopt
 from pylair import models,client
 from pprint import pprint
 
-def validate_json(data):
+def get_connection_details(args):
+    conx = {}
     try:
-        json.loads(data)
-        return True
-    except ValueError as error:
-        return False
+        lair_url = os.environ['LAIR_API_SERVER']
+        u = urllib3.util.parse_url(lair_url)
+        conx['username'],conx['password'] = u.auth.split(":")
+        conx['username'] = str(conx['username']).replace('%40','@')
+        conx['scheme'] = u.scheme
+        conx['port'] = u.port
+        if u.scheme == 'https' and u.port == None:
+            conx['port'] = 443
+    except KeyError:
+        pass
+
+    if args['-u']:
+        conx['username'] = args['-u']
+    if args['-p']:
+        conx['password'] = args['-p']
+    if args['-U']:
+        url = urllib3.util.parse_url(args['-U'])
+        conx['hostname'] = url.hostname
+        if url.scheme == 'https' and url.port == None:
+            conx['port'] = 443
+        conx['scheme'] = url.scheme
+    return conx
 
 def main():
     arguments = docopt(__doc__, version='drone-whois 2.0.0')
-    lair_url = ''
-    try:
-        lair_url = os.environ['LAIR_API_SERVER']
-    except KeyError:
-        print("Fatal: Missing LAIR_API_SERVER environment variable")
-        exit(1)
-
-    u = urllib3.util.parse_url(lair_url)
-    port = u.port
-    if u.scheme == 'https' and u.port == None:
-        port = 443
-
-    if u.auth is None:
-        print("Fatal: Missing username and/or password")
-        exit(1)
-
-    username,password = u.auth.split(":")
-    if username is None or password is None:
-        print("Fatal: Missing username and/or password")
-        exit(1)
+    conx_details = get_connection_details(arguments)
 
     project_id = arguments['<id>']
     project = dict(models.project)
@@ -57,7 +62,11 @@ def main():
     project['commands'] = [{'command': 'ipwhois', 'tool': 'ipwhois'}]
     project['tool'] = 'drone-whois'
 
-    opts = client.Options(username.replace('%40','@'), password, u.hostname + ":" + str(port), project_id, scheme=u.scheme,
+    opts = client.Options(conx_details['username'], 
+                          conx_details['password'], 
+                          conx_details['hostname'] + ":" + str(conx_details['port']), 
+                          project_id, 
+                          scheme=conx_details['scheme'],
                           insecure_skip_verify=arguments['-k'])
 
     lines = []
@@ -67,6 +76,7 @@ def main():
     except IOError as e:
         print("Fatal: Could not open file. Error: ",e)
         exit(1)
+
     for line in lines:
         try:
             IPs = list(ip_network(line))
@@ -75,7 +85,8 @@ def main():
             continue
         for ip in IPs:
             o = IPWhois(str(ip))
-            pprint(str(ip))
+            if arguments['-v'] is not None:
+                pprint(str(ip))
             try:
                 results = o.lookup_rdap(asn_methods=['dns','whois','http'],depth=1)
             except ASNRegistryError as ase:
@@ -87,7 +98,7 @@ def main():
             net=results['network']
             cidrs += net['cidr']
             netblock = dict(models.netblock)
-            #netblock['projectId'] = project_id
+            netblock['projectId'] = project_id
             netblock['asn'] = results['asn']
             netblock['asnCountryCode'] = results['asn_country_code']
             netblock['asnCidr'] = results['asn_cidr']
@@ -114,7 +125,7 @@ def main():
                         netblock['created'] = event['timestamp']
                     if event['action'] == 'last changed':
                         netblock['updated'] = event['timestamp']
-            netblock['description'] = net['remarks']
+            netblock['description'] = results['asn_description']
             netblock['handle'] = net['handle']
             project['netblocks'].append(netblock)
             #if results['raw_referral'] is None:
