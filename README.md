@@ -12,7 +12,7 @@ All original credit should be given to Tom Steele
 
 
 ## Install
-This library is dependent on [pylair](https://github.com/lair-framework/pylair). After installing pylair, download the latest release [here](https://github.com/x-a-n-d-e-r-k/drone-whois/releases/latest).
+This library is dependent on [pylair](https://github.com/x-a-n-d-e-r-k/pylair). After installing pylair, download the latest release [here](https://github.com/x-a-n-d-e-r-k/drone-whois/releases/latest).
 ```
 $ sudo pip install drone-whois*.tar.gz
 $ drone-whois -h
