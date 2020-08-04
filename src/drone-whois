@@ -2,7 +2,7 @@
 """drone-whois
 
 Usage:
-    drone-whois [-k] [-u=<username>] [-p=<password>] [-U=<url>] [-v] <id> <file>
+    drone-whois [-k] [-u <username>] [-p <password>] [-U <url>] [-v] <id> <file>
     drone-whois --version
     drone-whois (-h | --help)
 
@@ -11,11 +11,13 @@ Options:
     --version       Show version.
     -v              Verbose output
     -k              Allow insecure SSL connections.
-    -u=<username>   Lair Username
-    -p=<password>   Lair Password
-    -U=<url>        Lair API URL
+    -u <username>   Lair Username
+    -p <password>   Lair Password
+    -U <url>        Lair API URL
 
 """
+import signal
+import sys
 import os
 import re
 from sys import exit
@@ -34,10 +36,15 @@ def get_connection_details(args):
         conx['username'],conx['password'] = u.auth.split(":")
         conx['username'] = str(conx['username']).replace('%40','@')
         conx['scheme'] = u.scheme
-        conx['port'] = u.port
+        if u.port != None:
+            conx['port'] = int(u.port)
+        else:
+            conx['port'] = 80
         if u.scheme == 'https' and u.port == None:
             conx['port'] = 443
-    except KeyError:
+    except KeyError as err:
+        if args['-v']:
+            print('get_connection_details error: {0}'.format(err))
         pass
 
     if args['-u']:
@@ -47,6 +54,10 @@ def get_connection_details(args):
     if args['-U']:
         url = urllib3.util.parse_url(args['-U'])
         conx['hostname'] = url.hostname
+        if url.port != None:
+            conx['port'] = int(url.port)
+        else:
+            cons['port'] = 80
         if url.scheme == 'https' and url.port == None:
             conx['port'] = 443
         conx['scheme'] = url.scheme
@@ -55,6 +66,8 @@ def get_connection_details(args):
 def main():
     arguments = docopt(__doc__, version='drone-whois 2.0.0')
     conx_details = get_connection_details(arguments)
+    if arguments['-v']:
+        pprint(conx_details)
 
     project_id = arguments['<id>']
     project = dict(models.project)
@@ -71,13 +84,14 @@ def main():
 
     lines = []
     cidrs = []
+    error_count = 0
     try:
         lines = [line.rstrip('\n') for line in open(arguments['<file>'])]
     except IOError as e:
         print("Fatal: Could not open file. Error: ",e)
         exit(1)
 
-    for line in lines:
+    for line in sorted(set(lines)):
         try:
             IPs = list(ip_network(line))
         except AddrFormatError:
@@ -85,14 +99,17 @@ def main():
             continue
         for ip in IPs:
             o = IPWhois(str(ip))
-            if arguments['-v'] is not None:
-                pprint(str(ip))
+            pprint(str(ip))
             try:
                 results = o.lookup_rdap(asn_methods=['dns','whois','http'],depth=1)
             except ASNRegistryError as ase:
                 print('Error: There was an exception thrown when looking up whois information for ',str(ip),': ',ase)
                 continue
             except (TypeError,AttributeError,urllib3.exceptions.HTTPError,HTTPLookupError) as e:
+                error_count += 1
+                if error_count > 4:
+                    print('Too many errors: Exiting...')
+                    sys.exit(0)
                 print('Error: Unknown exception: ',e)
                 continue
             net=results['network']
@@ -165,7 +182,13 @@ def main():
         exit(1)
     print("Success: Operation completed successfully")
 
+def signal_handler(sig, frame):
+    sys.exit(0)
 
 if __name__ == '__main__':
-    main()
+    try:
+        signal.signal(signal.SIGINT, signal_handler)
+        main()
+    except KeyboardInterrupt:
+        sys.exit(0)
 
