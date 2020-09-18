@@ -2,7 +2,7 @@
 """drone-whois
 
 Usage:
-    drone-whois [-k] [-u <username>] [-p <password>] [-U <url>] [-v] <id> <file>
+    drone-whois [-k] [-u USERNAME] [-p PASSWORD] [-U LAIR_API_URL] [-v] LAIR_PROJECTID INPUT_FILE
     drone-whois --version
     drone-whois (-h | --help)
 
@@ -11,9 +11,9 @@ Options:
     --version       Show version.
     -v              Verbose output
     -k              Allow insecure SSL connections.
-    -u <username>   Lair Username
-    -p <password>   Lair Password
-    -U <url>        Lair API URL
+    -u USERNAME     Lair Username
+    -p PASSWORD     Lair Password
+    -U LAIR_API_URL Lair API URL
 
 """
 import signal
@@ -57,7 +57,7 @@ def get_connection_details(args):
         if url.port != None:
             conx['port'] = int(url.port)
         else:
-            cons['port'] = 80
+            conx['port'] = 80
         if url.scheme == 'https' and url.port == None:
             conx['port'] = 443
         conx['scheme'] = url.scheme
@@ -69,7 +69,7 @@ def main():
     if arguments['-v']:
         pprint(conx_details)
 
-    project_id = arguments['<id>']
+    project_id = arguments['LAIR_PROJECTID']
     project = dict(models.project)
     project['id'] = project_id
     project['commands'] = [{'command': 'ipwhois', 'tool': 'ipwhois'}]
@@ -86,7 +86,7 @@ def main():
     cidrs = []
     error_count = 0
     try:
-        lines = [line.rstrip('\n') for line in open(arguments['<file>'])]
+        lines = [line.rstrip('\n') for line in open(arguments['INPUT_FILE'])]
     except IOError as e:
         print("Fatal: Could not open file. Error: ",e)
         exit(1)
